@@ -1,0 +1,15 @@
+{
+  "defaultConfig": {
+    "guestsCanModify": false,
+    "guestsCanInviteOthers": false,
+    "guestsCanSeeOtherGuests": true,
+    "defaultAttendees": [],
+    "reminders": {
+      "useDefault": false,
+      "overrides": [
+        { "method": "email", "minutes": 1440 },
+        { "method": "popup", "minutes": 10 }
+      ]
+    }
+  }
+}
