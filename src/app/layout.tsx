@@ -1,5 +1,6 @@
 import React from 'react';
 import './globals.css';
+import Providers from './providers';
 
 export const metadata = {
     title: 'Manager de Eventos | Seamos Genios',
@@ -14,7 +15,9 @@ export default function RootLayout({
     return (
         <html lang="es">
             <body>
-                {children}
+                <Providers>
+                    {children}
+                </Providers>
             </body>
         </html>
     );

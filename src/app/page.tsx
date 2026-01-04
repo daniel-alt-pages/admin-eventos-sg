@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { useSession, signIn, signOut } from 'next-auth/react';
 import { SUBJECTS, Subject, getSubjectsArray } from '@/lib/subjects';
-import { FIXED_EVENTS } from '@/lib/fixedEvents';
 
 // Tipos
 interface CalendarEvent {
@@ -24,12 +24,14 @@ interface AllSubjectsInstances {
 type ViewMode = 'monthly' | 'weekly';
 
 export default function Home() {
+    // NextAuth session
+    const { data: session, status } = useSession();
+    const isAuthenticated = status === 'authenticated';
+    const isLoading = status === 'loading';
+
     // Reloj en tiempo real (solo cliente)
     const [currentTime, setCurrentTime] = useState<Date | null>(null);
     const [isMounted, setIsMounted] = useState(false);
-
-    // Estado de autenticación
-    const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
 
     // Estado de navegación
     const [viewMode, setViewMode] = useState<ViewMode>('monthly');
@@ -71,26 +73,12 @@ export default function Home() {
         return () => clearInterval(timer);
     }, []);
 
-    // Verificar autenticación y cargar datos al iniciar
+    // Cargar datos cuando hay sesión autenticada
     useEffect(() => {
-        checkAuth();
-    }, []);
-
-    useEffect(() => {
-        if (isAuthenticated) {
+        if (isAuthenticated && session?.accessToken) {
             loadAllInstances();
         }
-    }, [isAuthenticated]);
-
-    const checkAuth = async () => {
-        try {
-            const res = await fetch('/api/events/list?subject=Matemáticas&date=' + new Date().toISOString().split('T')[0]);
-            const data = await res.json();
-            setIsAuthenticated(!data.needsAuth);
-        } catch {
-            setIsAuthenticated(false);
-        }
-    };
+    }, [isAuthenticated, session]);
 
     const showToast = (text: string, type: 'success' | 'error' | 'warning' | 'info') => {
         setToast({ text, type });
@@ -416,15 +404,24 @@ export default function Home() {
                     📅 Calendario de Clases
                 </h1>
                 <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-                    {isAuthenticated === false && (
-                        <a href="/api/auth/login" className="btn btn-primary btn-sm">
-                            🔐 Conectar
-                        </a>
+                    {isLoading && (
+                        <span className="status-badge">⏳ Cargando...</span>
                     )}
-                    {isAuthenticated === true && (
-                        <span className="status-badge connected">
-                            <span className="status-dot"></span> Conectado
-                        </span>
+                    {!isLoading && !isAuthenticated && (
+                        <button onClick={() => signIn('google')} className="btn btn-primary btn-sm">
+                            🔐 Iniciar Sesión
+                        </button>
+                    )}
+                    {isAuthenticated && session?.user && (
+                        <>
+                            <span className="status-badge connected">
+                                <span className="status-dot"></span>
+                                {session.user.email?.split('@')[0]}
+                            </span>
+                            <button onClick={() => signOut()} className="btn btn-ghost btn-sm">
+                                Salir
+                            </button>
+                        </>
                     )}
                 </div>
             </div>
