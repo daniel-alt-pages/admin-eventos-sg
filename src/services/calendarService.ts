@@ -26,6 +26,7 @@ export class CalendarService {
     async authorize(): Promise<OAuth2Client> {
         try {
             let tokens: any;
+            console.log('[CalendarService] Starting authorization...');
 
             // Primero intentar leer de variable de entorno (producción)
             const envTokens = process.env.GOOGLE_TOKENS;
@@ -39,16 +40,20 @@ export class CalendarService {
                 console.log('[CalendarService] Using tokens from token.json file');
             }
 
+            console.log('[CalendarService] Getting OAuth client...');
             const client = getOAuthClient();
+            console.log('[CalendarService] OAuth client created, setting credentials...');
             client.setCredentials(tokens);
 
             this.auth = client;
             this.calendar = google.calendar({ version: 'v3', auth: client });
+            console.log('[CalendarService] Authorization successful');
             return client;
         } catch (e: any) {
-            console.error('Failed to load tokens');
-            console.error('Detail:', e.message);
-            throw new Error('No saved tokens found. Please configure GOOGLE_TOKENS environment variable.');
+            console.error('[CalendarService] Failed to load tokens or authorize');
+            console.error('[CalendarService] Error details:', e.message);
+            console.error('[CalendarService] Stack:', e.stack);
+            throw new Error(`Authorization failed: ${e.message}`);
         }
     }
 
