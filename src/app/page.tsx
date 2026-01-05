@@ -1,7 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
-import { useSession, signIn, signOut } from 'next-auth/react';
+import { useState, useEffect } from 'react';
 import { SUBJECTS, Subject, getSubjectsArray } from '@/lib/subjects';
 
 // Tipos
@@ -24,11 +23,6 @@ interface AllSubjectsInstances {
 type ViewMode = 'monthly' | 'weekly';
 
 export default function Home() {
-    // NextAuth session
-    const { data: session, status } = useSession();
-    const isAuthenticated = status === 'authenticated';
-    const isLoading = status === 'loading';
-
     // Reloj en tiempo real (solo cliente)
     const [currentTime, setCurrentTime] = useState<Date | null>(null);
     const [isMounted, setIsMounted] = useState(false);
@@ -73,12 +67,10 @@ export default function Home() {
         return () => clearInterval(timer);
     }, []);
 
-    // Cargar datos cuando hay sesión autenticada
+    // Cargar datos al inicio
     useEffect(() => {
-        if (isAuthenticated && session?.accessToken) {
-            loadAllInstances();
-        }
-    }, [isAuthenticated, session]);
+        loadAllInstances();
+    }, []);
 
     const showToast = (text: string, type: 'success' | 'error' | 'warning' | 'info') => {
         setToast({ text, type });
@@ -248,10 +240,6 @@ export default function Home() {
     };
 
     // Helpers de fecha
-    const formatTime = (date: Date) => {
-        return date.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
-    };
-
     const formatTimeStr = (dateStr: string) => {
         return new Date(dateStr).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
     };
@@ -398,32 +386,15 @@ export default function Home() {
                 </div>
             </div>
 
-            {/* Estado de conexión */}
+            {/* Título */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                 <h1 style={{ fontSize: '1.5rem', fontWeight: '600' }}>
                     📅 Calendario de Clases
                 </h1>
-                <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-                    {isLoading && (
-                        <span className="status-badge">⏳ Cargando...</span>
-                    )}
-                    {!isLoading && !isAuthenticated && (
-                        <button onClick={() => signIn('google')} className="btn btn-primary btn-sm">
-                            🔐 Iniciar Sesión
-                        </button>
-                    )}
-                    {isAuthenticated && session?.user && (
-                        <>
-                            <span className="status-badge connected">
-                                <span className="status-dot"></span>
-                                {session.user.email?.split('@')[0]}
-                            </span>
-                            <button onClick={() => signOut()} className="btn btn-ghost btn-sm">
-                                Salir
-                            </button>
-                        </>
-                    )}
-                </div>
+                <span className="status-badge connected">
+                    <span className="status-dot"></span>
+                    Conectado
+                </span>
             </div>
 
             {/* Panel de eliminados */}
