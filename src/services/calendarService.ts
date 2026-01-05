@@ -20,11 +20,24 @@ export class CalendarService {
 
     /**
      * Autoriza el cliente OAuth2 con los tokens guardados.
+     * En producción: lee de GOOGLE_TOKENS (variable de entorno)
+     * En desarrollo: lee de token.json (archivo local)
      */
     async authorize(): Promise<OAuth2Client> {
         try {
-            const content = await fs.readFile(TOKEN_PATH, 'utf-8');
-            const tokens = JSON.parse(content);
+            let tokens: any;
+
+            // Primero intentar leer de variable de entorno (producción)
+            const envTokens = process.env.GOOGLE_TOKENS;
+            if (envTokens) {
+                tokens = JSON.parse(envTokens);
+                console.log('[CalendarService] Using tokens from GOOGLE_TOKENS env var');
+            } else {
+                // Fallback: leer de archivo local (desarrollo)
+                const content = await fs.readFile(TOKEN_PATH, 'utf-8');
+                tokens = JSON.parse(content);
+                console.log('[CalendarService] Using tokens from token.json file');
+            }
 
             const client = getOAuthClient();
             client.setCredentials(tokens);
@@ -33,9 +46,9 @@ export class CalendarService {
             this.calendar = google.calendar({ version: 'v3', auth: client });
             return client;
         } catch (e: any) {
-            console.error('Failed to load tokens from:', TOKEN_PATH);
+            console.error('Failed to load tokens');
             console.error('Detail:', e.message);
-            throw new Error('No saved tokens found. Please log in via the Web UI.');
+            throw new Error('No saved tokens found. Please configure GOOGLE_TOKENS environment variable.');
         }
     }
 
