@@ -11,9 +11,11 @@ export const getOAuthClient = () => {
 
     // Primero intentar variables de entorno (Vercel/producción)
     if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
-        clientId = process.env.GOOGLE_CLIENT_ID;
-        clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-        redirectUri = process.env.GOOGLE_REDIRECT_URI ||
+        clientId = process.env.GOOGLE_CLIENT_ID.trim();
+        clientSecret = process.env.GOOGLE_CLIENT_SECRET.trim();
+
+        const envRedirect = process.env.GOOGLE_REDIRECT_URI ? process.env.GOOGLE_REDIRECT_URI.trim() : undefined;
+        redirectUri = envRedirect ||
             (process.env.VERCEL_URL
                 ? `https://${process.env.VERCEL_URL}/api/auth/callback/google`
                 : 'http://localhost:3000/api/auth/callback/google');

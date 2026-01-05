@@ -29,10 +29,15 @@ export class CalendarService {
             console.log('[CalendarService] Starting authorization...');
 
             // Primero intentar leer de variable de entorno (producción)
-            const envTokens = process.env.GOOGLE_TOKENS;
+            const envTokens = process.env.GOOGLE_TOKENS ? process.env.GOOGLE_TOKENS.trim() : null;
             if (envTokens) {
-                tokens = JSON.parse(envTokens);
-                console.log('[CalendarService] Using tokens from GOOGLE_TOKENS env var');
+                try {
+                    tokens = JSON.parse(envTokens);
+                    console.log('[CalendarService] Using tokens from GOOGLE_TOKENS env var');
+                } catch (parseError: any) {
+                    console.error('[CalendarService] Failed to parse GOOGLE_TOKENS:', parseError.message);
+                    throw new Error('Invalid GOOGLE_TOKENS JSON format');
+                }
             } else {
                 // Fallback: leer de archivo local (desarrollo)
                 const content = await fs.readFile(TOKEN_PATH, 'utf-8');
