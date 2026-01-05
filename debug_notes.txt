@@ -1,0 +1,7 @@
+
+const { CalendarService } = require('./src/services/calendarService.ts');
+// Mock process and path for local test if needed or run with ts-node
+// Better to create a quick route in /api/test-events/route.ts to test in vercel environment if possible, 
+// or run a node script locally.
+
+// Since I cannot run ts-node easily here without setup, I will creating a temporary API route to debug data fetching.
