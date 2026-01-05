@@ -32,9 +32,49 @@ export default function Home() {
     const [selectedInstance, setSelectedInstance] = useState<CalendarEvent | null>(null);
     const [loading, setLoading] = useState(false);
 
+    // Sistema de sugerencias inteligentes
+    const [titleHistory, setTitleHistory] = useState<string[]>([]);
+    const [showSuggestions, setShowSuggestions] = useState(false);
+    const [filteredSuggestions, setFilteredSuggestions] = useState<string[]>([]);
+
     const [editForm, setEditForm] = useState({
-        summary: '', date: '', startTime: '08:00', endTime: '09:00', duration: 60
+        summary: '', date: '', startTime: '08:00', endTime: '09:00', duration: 60, description: ''
     });
+
+    // Cargar historial de títulos al montar
+    useEffect(() => {
+        const saved = localStorage.getItem('titleHistory');
+        if (saved) setTitleHistory(JSON.parse(saved));
+    }, []);
+
+    // Guardar título en historial
+    const saveTitleToHistory = (title: string) => {
+        if (!title.trim()) return;
+        const updated = [title, ...titleHistory.filter(t => t !== title)].slice(0, 20); // Max 20
+        setTitleHistory(updated);
+        localStorage.setItem('titleHistory', JSON.stringify(updated));
+    };
+
+    // Filtrar sugerencias mientras escribe
+    const handleSummaryChange = (value: string) => {
+        setEditForm(prev => ({ ...prev, summary: value }));
+        if (value.length > 1) {
+            const matches = titleHistory.filter(t => t.toLowerCase().includes(value.toLowerCase()));
+            setFilteredSuggestions(matches.slice(0, 5));
+            setShowSuggestions(matches.length > 0);
+        } else {
+            setShowSuggestions(false);
+        }
+    };
+
+    // Plantillas de descripción
+    const descriptionTemplates = [
+        '📚 Repaso general del tema',
+        '✏️ Ejercicios prácticos',
+        '📝 Evaluación y retroalimentación',
+        '🎯 Preparación para examen',
+        '💡 Introducción a nuevo tema'
+    ];
 
     useEffect(() => {
         setCurrentTime(new Date());
@@ -97,8 +137,10 @@ export default function Home() {
             date: start.toISOString().split('T')[0],
             startTime: start.toTimeString().slice(0, 5),
             endTime: end.toTimeString().slice(0, 5),
-            duration: dur
+            duration: dur,
+            description: ''
         });
+        setShowSuggestions(false);
     };
 
     const handleSave = async () => {
@@ -118,6 +160,7 @@ export default function Home() {
                     start: startDT.toISOString(), end: endDT.toISOString()
                 })
             });
+            saveTitleToHistory(editForm.summary);
             await loadAllInstances();
             setSelectedInstance(null);
         } catch (e) { } finally { setLoading(false); }
@@ -253,9 +296,62 @@ export default function Home() {
                             <button onClick={() => setSelectedInstance(null)} style={{ background: 'none', border: 'none', color: 'white', fontSize: '1.5rem', cursor: 'pointer' }}>×</button>
                         </div>
                         <div className="modal-body">
-                            <div className="input-group">
+                            {/* TÍTULO CON SUGERENCIAS */}
+                            <div className="input-group" style={{ position: 'relative' }}>
                                 <label className="label">TÍTULO</label>
-                                <input className="input-futuristic" value={editForm.summary} onChange={e => setEditForm({ ...editForm, summary: e.target.value })} />
+                                <input
+                                    className="input-futuristic"
+                                    value={editForm.summary}
+                                    onChange={e => handleSummaryChange(e.target.value)}
+                                    onFocus={() => editForm.summary.length > 1 && filteredSuggestions.length > 0 && setShowSuggestions(true)}
+                                    placeholder="Escribe o selecciona..."
+                                />
+                                {showSuggestions && (
+                                    <div style={{
+                                        position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
+                                        background: '#1a1a1a', border: '1px solid #333', borderRadius: '8px',
+                                        marginTop: '4px', maxHeight: '150px', overflowY: 'auto'
+                                    }}>
+                                        {filteredSuggestions.map((s, i) => (
+                                            <div
+                                                key={i}
+                                                onClick={() => { setEditForm(prev => ({ ...prev, summary: s })); setShowSuggestions(false); }}
+                                                style={{ padding: '0.75rem', cursor: 'pointer', borderBottom: '1px solid #222', fontSize: '0.9rem' }}
+                                                onMouseEnter={e => (e.target as HTMLElement).style.background = '#333'}
+                                                onMouseLeave={e => (e.target as HTMLElement).style.background = 'transparent'}
+                                            >
+                                                💡 {s}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* DESCRIPCIÓN CON PLANTILLAS */}
+                            <div className="input-group">
+                                <label className="label">DESCRIPCIÓN (Opcional)</label>
+                                <textarea
+                                    className="input-futuristic"
+                                    value={editForm.description}
+                                    onChange={e => setEditForm({ ...editForm, description: e.target.value })}
+                                    placeholder="Notas adicionales..."
+                                    rows={2}
+                                    style={{ resize: 'none' }}
+                                />
+                                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
+                                    {descriptionTemplates.map((t, i) => (
+                                        <button
+                                            key={i}
+                                            onClick={() => setEditForm(prev => ({ ...prev, description: t }))}
+                                            style={{
+                                                padding: '0.3rem 0.6rem', fontSize: '0.7rem', borderRadius: '6px',
+                                                border: '1px solid #333', background: 'transparent', color: '#888', cursor: 'pointer'
+                                            }}
+                                        >
+                                            {t}
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
 
                             <div className="input-group">
