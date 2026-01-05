@@ -1,40 +1,30 @@
 import { NextResponse } from 'next/server';
 
-// TEMPORAL: Endpoint de diagnóstico para verificar variables de entorno
-// ELIMINAR DESPUÉS DE RESOLVER EL PROBLEMA
+// Función para limpiar variables (igual que en NextAuth)
+const cleanEnv = (value: string | undefined): string => {
+    return value?.trim().replace(/[\r\n\t]/g, '') || '';
+};
 
 export async function GET() {
-    const clientId = process.env.GOOGLE_CLIENT_ID;
-    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-    const nextAuthSecret = process.env.NEXTAUTH_SECRET;
-    const nextAuthUrl = process.env.NEXTAUTH_URL;
+    const clientIdRaw = process.env.GOOGLE_CLIENT_ID;
+    const clientIdClean = cleanEnv(clientIdRaw);
+    const nextAuthUrlRaw = process.env.NEXTAUTH_URL;
+    const nextAuthUrlClean = cleanEnv(nextAuthUrlRaw);
 
     return NextResponse.json({
         message: "Diagnóstico de variables de entorno",
-        variables: {
-            GOOGLE_CLIENT_ID: {
-                exists: !!clientId,
-                length: clientId?.length || 0,
-                starts: clientId?.substring(0, 15) || "undefined",
-                ends: clientId?.substring(clientId.length - 20) || "undefined",
-                hasSpaces: clientId?.includes(' ') || false,
-                hasNewlines: clientId?.includes('\n') || clientId?.includes('\r') || false,
-            },
-            GOOGLE_CLIENT_SECRET: {
-                exists: !!clientSecret,
-                length: clientSecret?.length || 0,
-                starts: clientSecret?.substring(0, 8) || "undefined",
-            },
-            NEXTAUTH_SECRET: {
-                exists: !!nextAuthSecret,
-                length: nextAuthSecret?.length || 0,
-            },
-            NEXTAUTH_URL: {
-                exists: !!nextAuthUrl,
-                value: nextAuthUrl || "undefined",
-            }
+        status: clientIdClean.length === 72 ? "✅ OK" : "❌ ERROR",
+        raw: {
+            GOOGLE_CLIENT_ID_length: clientIdRaw?.length || 0,
+            NEXTAUTH_URL: nextAuthUrlRaw,
         },
-        expectedClientIdLength: 72, // El client ID correcto tiene 72 caracteres
+        cleaned: {
+            GOOGLE_CLIENT_ID_length: clientIdClean.length,
+            GOOGLE_CLIENT_ID_starts: clientIdClean.substring(0, 15),
+            GOOGLE_CLIENT_ID_ends: clientIdClean.substring(clientIdClean.length - 25),
+            NEXTAUTH_URL: nextAuthUrlClean,
+        },
+        expectedLength: 72,
         timestamp: new Date().toISOString()
     });
 }
