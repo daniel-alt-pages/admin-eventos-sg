@@ -9,6 +9,12 @@ const cleanEnv = (value: string | undefined): string => {
 const GOOGLE_CLIENT_ID = cleanEnv(process.env.GOOGLE_CLIENT_ID);
 const GOOGLE_CLIENT_SECRET = cleanEnv(process.env.GOOGLE_CLIENT_SECRET);
 const NEXTAUTH_SECRET = cleanEnv(process.env.NEXTAUTH_SECRET);
+const NEXTAUTH_URL = cleanEnv(process.env.NEXTAUTH_URL);
+
+// Debug: Log para verificar que las credenciales se están leyendo
+console.log('[NextAuth] Client ID length:', GOOGLE_CLIENT_ID.length);
+console.log('[NextAuth] Client Secret length:', GOOGLE_CLIENT_SECRET.length);
+console.log('[NextAuth] NEXTAUTH_URL:', NEXTAUTH_URL);
 
 const handler = NextAuth({
     providers: [
