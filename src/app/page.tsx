@@ -6,24 +6,18 @@ import DigitalTimePicker from '../components/DigitalTimePicker';
 
 interface CalendarEvent {
     id: string;
-    recurringEventId?: string;
     summary: string;
-    description?: string;
-    start: { dateTime: string; timeZone?: string };
-    end: { dateTime: string; timeZone?: string };
+    start: { dateTime: string };
+    end: { dateTime: string };
     hangoutLink?: string;
-    htmlLink?: string;
-    status?: string;
     subjectName?: Subject;
 }
 
 interface AllSubjectsInstances { [key: string]: CalendarEvent[]; }
 
-type ViewMode = 'monthly' | 'weekly';
-
 export default function Home() {
     const [currentTime, setCurrentTime] = useState<Date | null>(null);
-    const [viewMode, setViewMode] = useState<ViewMode>('monthly');
+    const [viewMode, setViewMode] = useState<'monthly' | 'weekly'>('monthly');
     const [selectedSubject, setSelectedSubject] = useState<Subject | null>(null);
 
     const [currentWeekStart, setCurrentWeekStart] = useState<Date>(() => {
@@ -38,7 +32,6 @@ export default function Home() {
     const [selectedInstance, setSelectedInstance] = useState<CalendarEvent | null>(null);
     const [loading, setLoading] = useState(false);
 
-    // Edit Form State
     const [editForm, setEditForm] = useState({
         summary: '', date: '', startTime: '08:00', endTime: '09:00', duration: 60
     });
@@ -50,7 +43,7 @@ export default function Home() {
         return () => clearInterval(timer);
     }, []);
 
-    // Time Logic
+    // Helpers de tiempo
     const getMinutes = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
     const formatMinutes = (mins: number) => {
         const h = Math.floor(mins / 60) % 24;
@@ -69,7 +62,7 @@ export default function Home() {
         let end = getMinutes(newEnd);
         if (end < start) end += 24 * 60;
         const dur = end - start;
-        setEditForm(prev => ({ ...prev, endTime: newEnd, duration: dur }));
+        setEditForm(prev => ({ ...prev, endTime: newEnd, duration: dur > 0 ? dur : prev.duration }));
     };
 
     const handleDurationChange = (dur: number) => {
@@ -77,7 +70,6 @@ export default function Home() {
         setEditForm(prev => ({ ...prev, duration: dur, endTime: formatMinutes(start + dur) }));
     };
 
-    // Data Loading (Mocked/Real)
     const loadAllInstances = async () => {
         setLoading(true);
         const subjects = getSubjectsArray();
@@ -133,7 +125,7 @@ export default function Home() {
 
     const handleDelete = async () => {
         if (!selectedInstance) return;
-        if (!confirm('CONFIRM DELETE?')) return;
+        if (!confirm('¿Eliminar esta clase?')) return;
         setLoading(true);
         try {
             await fetch('/api/events/instance', {
@@ -146,15 +138,14 @@ export default function Home() {
         } catch (e) { } finally { setLoading(false); }
     };
 
-    // Helpers
+    // Helpers calendario
     const weekDays = Array.from({ length: 7 }, (_, i) => {
         const d = new Date(currentWeekStart); d.setDate(currentWeekStart.getDate() + i); return d;
     });
 
     const getEvents = (date: Date) => {
-        const isSame = (d1: Date, d2: Date) => d1.getDate() === d2.getDate() && d1.getMonth() === d2.getMonth();
+        const isSame = (d1: Date, d2: Date) => d1.getDate() === d2.getDate() && d1.getMonth() === d2.getMonth() && d1.getFullYear() === d2.getFullYear();
         if (selectedSubject) return (allInstances[selectedSubject] || []).filter(e => isSame(new Date(e.start.dateTime), date)).map(e => ({ ...e, subjectName: selectedSubject }));
-
         return Object.entries(allInstances).flatMap(([s, evs]) => evs.filter(e => isSame(new Date(e.start.dateTime), date)).map(e => ({ ...e, subjectName: s as Subject })));
     };
 
@@ -162,19 +153,19 @@ export default function Home() {
 
     return (
         <div className="app-container">
-            {/* HERO HEADER */}
+            {/* ENCABEZADO */}
             <header className="header-hero">
                 <div className="digital-clock">
                     {currentTime ? currentTime.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) : '00:00'}
                 </div>
-                <h1 className="main-title">EVENT MANAGER_V2</h1>
-                <div style={{ color: 'var(--primary-neon)', letterSpacing: '2px', fontSize: '0.8rem', marginTop: '0.5rem' }}>SYSTEM ONLINE</div>
+                <h1 className="main-title">GESTOR DE EVENTOS</h1>
+                <div style={{ color: 'var(--primary-neon)', letterSpacing: '2px', fontSize: '0.8rem', marginTop: '0.5rem' }}>SISTEMA EN LÍNEA</div>
             </header>
 
-            {/* CONTROLS */}
-            <div className="glass" style={{ padding: '1rem', borderRadius: '16px', marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <button className={`btn ${viewMode === 'monthly' ? 'btn-neon' : 'btn-ghost'}`} onClick={() => { setViewMode('monthly'); setSelectedSubject(null) }}>MONTH</button>
+            {/* CONTROLES */}
+            <div className="glass" style={{ padding: '1rem', borderRadius: '16px', marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    <button className={`btn ${viewMode === 'monthly' && !selectedSubject ? 'btn-neon' : 'btn-ghost'}`} onClick={() => { setViewMode('monthly'); setSelectedSubject(null) }}>MES</button>
                     {subjects.map(s => (
                         <button key={s.name}
                             onClick={() => { setViewMode('weekly'); setSelectedSubject(s.name) }}
@@ -182,67 +173,68 @@ export default function Home() {
                                 padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid #333',
                                 background: selectedSubject === s.name ? s.color : 'transparent',
                                 color: selectedSubject === s.name ? 'white' : '#888',
-                                cursor: 'pointer'
+                                cursor: 'pointer', fontSize: '0.85rem'
                             }}
                         >
                             {s.displayName}
                         </button>
                     ))}
                 </div>
-                <button className="btn btn-ghost" onClick={loadAllInstances}>SYNC DATA</button>
+                <button className="btn btn-ghost" onClick={loadAllInstances} disabled={loading}>{loading ? '⏳' : '🔄'} SINCRONIZAR</button>
             </div>
 
-            {/* MEET BANNER - Only in Weekly Subject View */}
+            {/* BANNER MEET */}
             {viewMode === 'weekly' && selectedSubject && allInstances[selectedSubject]?.[0]?.hangoutLink && (
                 <div className="meet-banner glass">
                     <div>
-                        <h3 style={{ margin: 0, color: 'white', fontFamily: 'var(--font-display)' }}>VIRTUAL ROOM: {selectedSubject}</h3>
+                        <h3 style={{ margin: 0, color: 'white', fontFamily: 'var(--font-display)' }}>SALA VIRTUAL: {SUBJECTS[selectedSubject].displayName}</h3>
                         <div className="meet-link">
-                            <span style={{ color: 'var(--text-dim)' }}>ACCESS LINK:</span>
+                            <span style={{ color: 'var(--text-dim)' }}>ENLACE:</span>
                             {allInstances[selectedSubject][0].hangoutLink}
                         </div>
                     </div>
-                    <a href={allInstances[selectedSubject][0].hangoutLink} target="_blank" className="btn btn-neon" style={{ textDecoration: 'none', padding: '0.75rem 1.5rem', fontSize: '0.9rem' }}>JOIN NOW</a>
+                    <a href={allInstances[selectedSubject][0].hangoutLink} target="_blank" className="btn btn-neon" style={{ textDecoration: 'none', padding: '0.75rem 1.5rem', fontSize: '0.85rem' }}>UNIRSE</a>
                 </div>
             )}
 
-            {/* CALENDAR GRID */}
+            {/* CALENDARIO */}
             <div className={`cal-grid ${viewMode}`}>
                 {viewMode === 'monthly' ? (
-                    /* Monthly Logic Simplified for brevity but functional */
                     Array.from({ length: 31 }, (_, i) => {
                         const d = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), i + 1);
+                        if (d.getMonth() !== currentMonth.getMonth()) return null;
                         const events = getEvents(d);
                         const isToday = d.toDateString() === new Date().toDateString();
                         return (
                             <div key={i} className={`day-panel glass ${isToday ? 'today' : ''}`}>
                                 <div className="day-header">
-                                    <span className="day-name">{d.toLocaleDateString('en-US', { weekday: 'short' })}</span>
+                                    <span className="day-name">{d.toLocaleDateString('es-CO', { weekday: 'short' })}</span>
                                     <span className="day-num">{d.getDate()}</span>
                                 </div>
                                 {events.slice(0, 3).map((ev, k) => (
                                     <div key={k} className="event-chip" style={{ borderLeftColor: SUBJECTS[ev.subjectName as Subject]?.color }} onClick={() => handleSelectInstance(ev, ev.subjectName as Subject)}>
-                                        <div className="chip-time">{new Date(ev.start.dateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                                        <div className="chip-time">{new Date(ev.start.dateTime).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}</div>
                                         <div className="chip-title">{ev.summary}</div>
                                     </div>
                                 ))}
+                                {events.length > 3 && <div style={{ fontSize: '0.7rem', color: '#666' }}>+{events.length - 3} más</div>}
                             </div>
                         )
-                    })
+                    }).filter(Boolean)
                 ) : (
-                    /* Weekly Logic */
                     weekDays.map((d, i) => {
                         const events = getEvents(d);
                         const isToday = d.toDateString() === new Date().toDateString();
                         return (
                             <div key={i} className={`day-panel glass ${isToday ? 'today' : ''}`}>
                                 <div className="day-header">
-                                    <span className="day-name">{d.toLocaleDateString('en-US', { weekday: 'short' })}</span>
+                                    <span className="day-name">{d.toLocaleDateString('es-CO', { weekday: 'short' })}</span>
                                     <span className="day-num">{d.getDate()}</span>
                                 </div>
+                                {events.length === 0 && <div style={{ textAlign: 'center', padding: '2rem 0', color: '#555', fontSize: '0.85rem' }}>Sin clases</div>}
                                 {events.map((ev, k) => (
                                     <div key={k} className="event-chip" style={{ borderLeftColor: SUBJECTS[ev.subjectName as Subject]?.color }} onClick={() => handleSelectInstance(ev, ev.subjectName as Subject)}>
-                                        <div className="chip-time">{new Date(ev.start.dateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                                        <div className="chip-time">{new Date(ev.start.dateTime).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}</div>
                                         <div className="chip-title">{ev.summary}</div>
                                     </div>
                                 ))}
@@ -252,65 +244,63 @@ export default function Home() {
                 )}
             </div>
 
-            {/* EDITOR COMPONENT (MODAL) */}
+            {/* MODAL EDITAR */}
             {selectedInstance && (
                 <div className="modal-overlay">
                     <div className="modal-content">
                         <div className="modal-header">
-                            <h2 style={{ margin: 0, fontSize: '1.2rem', fontFamily: 'var(--font-display)' }}>EDIT SESSION</h2>
+                            <h2 style={{ margin: 0, fontSize: '1.1rem', fontFamily: 'var(--font-display)' }}>EDITAR CLASE</h2>
                             <button onClick={() => setSelectedInstance(null)} style={{ background: 'none', border: 'none', color: 'white', fontSize: '1.5rem', cursor: 'pointer' }}>×</button>
                         </div>
                         <div className="modal-body">
                             <div className="input-group">
-                                <label className="label">SESSION TITLE</label>
+                                <label className="label">TÍTULO</label>
                                 <input className="input-futuristic" value={editForm.summary} onChange={e => setEditForm({ ...editForm, summary: e.target.value })} />
                             </div>
 
                             <div className="input-group">
-                                <label className="label">DATE</label>
+                                <label className="label">FECHA</label>
                                 <input type="date" className="input-futuristic" value={editForm.date} onChange={e => setEditForm({ ...editForm, date: e.target.value })} style={{ colorScheme: 'dark' }} />
                             </div>
 
                             <div className="input-group">
-                                <label className="label">TIME CONFIGURATION</label>
-                                <div className="time-control-grid">
-                                    {/* Start Time Picker */}
-                                    <div>
-                                        <div style={{ marginBottom: '4px', fontSize: '0.7rem', color: '#666' }}>START</div>
-                                        <DigitalTimePicker value={editForm.startTime} onChange={handleStartTimeChange} />
-                                    </div>
-                                    <div className="time-arrow">➜</div>
-                                    {/* End Time Picker */}
-                                    <div>
-                                        <div style={{ marginBottom: '4px', fontSize: '0.7rem', color: '#666' }}>END</div>
-                                        <DigitalTimePicker value={editForm.endTime} onChange={handleEndTimeChange} />
-                                    </div>
+                                <label className="label">HORARIO</label>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                                    <DigitalTimePicker label="INICIO" value={editForm.startTime} onChange={handleStartTimeChange} />
+                                    <span style={{ color: '#555', fontSize: '1.5rem' }}>→</span>
+                                    <DigitalTimePicker label="FIN" value={editForm.endTime} onChange={handleEndTimeChange} />
                                 </div>
                             </div>
 
                             <div className="input-group">
-                                <label className="label">DURATION PRESETS</label>
-                                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                <label className="label">DURACIÓN RÁPIDA</label>
+                                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                                     {[30, 45, 60, 90, 120].map(m => (
                                         <button key={m}
                                             onClick={() => handleDurationChange(m)}
                                             style={{
-                                                padding: '0.5rem', borderRadius: '8px', border: '1px solid #333',
+                                                padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #333',
                                                 background: editForm.duration === m ? 'var(--primary-neon)' : 'transparent',
                                                 color: editForm.duration === m ? 'black' : '#888',
-                                                cursor: 'pointer', fontFamily: 'var(--font-mono)'
+                                                cursor: 'pointer', fontFamily: 'var(--font-mono)', fontSize: '0.85rem'
                                             }}
                                         >
-                                            {m}m
+                                            {m}min
                                         </button>
                                     ))}
                                 </div>
                             </div>
 
                             <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
-                                <button className="btn btn-ghost" style={{ borderColor: '#f00', color: '#f00' }} onClick={handleDelete}>DELETE</button>
-                                <button className="btn btn-neon" style={{ flex: 1 }} onClick={handleSave}>{loading ? 'PROCESSING...' : 'SAVE CHANGES'}</button>
+                                <button className="btn btn-ghost" style={{ borderColor: '#f44', color: '#f44' }} onClick={handleDelete}>ELIMINAR</button>
+                                <button className="btn btn-neon" style={{ flex: 1 }} onClick={handleSave} disabled={loading}>{loading ? 'GUARDANDO...' : 'GUARDAR CAMBIOS'}</button>
                             </div>
+
+                            {selectedInstance.hangoutLink && (
+                                <div style={{ marginTop: '1.5rem', textAlign: 'center' }}>
+                                    <a href={selectedInstance.hangoutLink} target="_blank" style={{ color: 'var(--primary-neon)', textDecoration: 'none', fontFamily: 'var(--font-mono)', fontSize: '0.9rem' }}>🎥 Unirse al Meet</a>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
