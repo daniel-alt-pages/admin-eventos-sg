@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { SUBJECTS, Subject, getSubjectsArray } from '@/lib/subjects';
 
-// Tipos
+// Types
 interface CalendarEvent {
     id: string;
     recurringEventId?: string;
@@ -14,6 +14,7 @@ interface CalendarEvent {
     hangoutLink?: string;
     htmlLink?: string;
     status?: string;
+    subjectName?: Subject; // Extended property for UI
 }
 
 interface AllSubjectsInstances {
@@ -23,33 +24,31 @@ interface AllSubjectsInstances {
 type ViewMode = 'monthly' | 'weekly';
 
 export default function Home() {
-    // Reloj en tiempo real (solo cliente)
+    // --- STATE ---
     const [currentTime, setCurrentTime] = useState<Date | null>(null);
-    const [isMounted, setIsMounted] = useState(false);
-
-    // Estado de navegación
     const [viewMode, setViewMode] = useState<ViewMode>('monthly');
     const [selectedSubject, setSelectedSubject] = useState<Subject | null>(null);
+
+    // Dates
     const [currentWeekStart, setCurrentWeekStart] = useState<Date>(() => {
         const today = new Date();
-        const dayOfWeek = today.getDay();
-        const diff = today.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+        const dayOfWeek = today.getDay(); // 0 (Sun) to 6 (Sat)
+        const diff = today.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1); // Adjust to Monday
         return new Date(today.setDate(diff));
     });
     const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
 
-    // Estado de instancias
+    // Data
     const [allInstances, setAllInstances] = useState<AllSubjectsInstances>({});
     const [selectedInstance, setSelectedInstance] = useState<CalendarEvent | null>(null);
-    const [selectedInstanceSubject, setSelectedInstanceSubject] = useState<Subject | null>(null);
     const [deletedInstances, setDeletedInstances] = useState<CalendarEvent[]>([]);
 
-    // Estado de UI
+    // UI State
     const [loading, setLoading] = useState(false);
-    const [toast, setToast] = useState<{ text: string; type: 'success' | 'error' | 'warning' | 'info' } | null>(null);
+    const [toast, setToast] = useState<{ text: string; type: 'success' | 'error' | 'warning' } | null>(null);
     const [showDeletedPanel, setShowDeletedPanel] = useState(false);
 
-    // Estado del formulario de edición
+    // Edit Form
     const [editForm, setEditForm] = useState({
         summary: '',
         description: '',
@@ -59,25 +58,23 @@ export default function Home() {
         duration: 60
     });
 
-    // Reloj actualizado cada segundo (solo cliente para evitar hydration mismatch)
+    // --- EFFECTS ---
     useEffect(() => {
-        setIsMounted(true);
         setCurrentTime(new Date());
         const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+        loadAllInstances();
         return () => clearInterval(timer);
     }, []);
 
-    // Cargar datos al inicio
-    useEffect(() => {
-        loadAllInstances();
-    }, []);
+    // --- METHODS ---
 
-    const showToast = (text: string, type: 'success' | 'error' | 'warning' | 'info') => {
+    // Notifications
+    const showToast = (text: string, type: 'success' | 'error' | 'warning') => {
         setToast({ text, type });
         setTimeout(() => setToast(null), 4000);
     };
 
-    // Cargar instancias de todas las materias
+    // Load Data
     const loadAllInstances = async () => {
         setLoading(true);
         const subjects = getSubjectsArray();
@@ -96,17 +93,16 @@ export default function Home() {
                 }
             }));
             setAllInstances(allData);
-        } catch (err: any) {
+        } catch (err) {
             showToast('Error cargando datos', 'error');
         } finally {
             setLoading(false);
         }
     };
 
-    // Seleccionar una instancia para editar
+    // Selection & Editing
     const handleSelectInstance = (instance: CalendarEvent, subject: Subject) => {
-        setSelectedInstance(instance);
-        setSelectedInstanceSubject(subject);
+        setSelectedInstance({ ...instance, subjectName: subject });
 
         const startDate = new Date(instance.start.dateTime);
         const endDate = new Date(instance.end.dateTime);
@@ -122,15 +118,8 @@ export default function Home() {
         });
     };
 
-    // Cerrar editor
-    const handleCloseEditor = () => {
-        setSelectedInstance(null);
-        setSelectedInstanceSubject(null);
-    };
-
-    // Guardar cambios
     const handleSaveInstance = async () => {
-        if (!selectedInstanceSubject || !selectedInstance) return;
+        if (!selectedInstance || !selectedInstance.subjectName) return;
 
         setLoading(true);
         try {
@@ -141,7 +130,7 @@ export default function Home() {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    subject: selectedInstanceSubject,
+                    subject: selectedInstance.subjectName,
                     eventId: selectedInstance.id,
                     summary: editForm.summary,
                     description: editForm.description,
@@ -151,26 +140,23 @@ export default function Home() {
             });
 
             const data = await res.json();
-
             if (data.success) {
-                showToast('✓ Clase actualizada correctamente', 'success');
+                showToast('Clase actualizada', 'success');
                 await loadAllInstances();
-                handleCloseEditor();
+                setSelectedInstance(null);
             } else {
-                showToast(data.error || 'Error al guardar', 'error');
+                showToast(data.error || 'Error', 'error');
             }
         } catch (err: any) {
-            showToast('Error: ' + err.message, 'error');
+            showToast(err.message, 'error');
         } finally {
             setLoading(false);
         }
     };
 
-    // Cancelar/Eliminar instancia
     const handleDeleteInstance = async () => {
-        if (!selectedInstanceSubject || !selectedInstance) return;
-
-        if (!confirm('¿Cancelar esta clase? Podrás restaurarla después.')) return;
+        if (!selectedInstance || !selectedInstance.subjectName) return;
+        if (!confirm('¿Cancelar clase?')) return;
 
         setLoading(true);
         try {
@@ -178,39 +164,31 @@ export default function Home() {
                 method: 'DELETE',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    subject: selectedInstanceSubject,
+                    subject: selectedInstance.subjectName,
                     instanceId: selectedInstance.id
                 })
             });
 
             const data = await res.json();
-
             if (data.success) {
-                showToast('Clase cancelada. Puedes restaurarla.', 'warning');
-                setDeletedInstances(prev => [...prev, { ...selectedInstance, recurringEventId: selectedInstanceSubject }]);
+                setDeletedInstances(prev => [...prev, selectedInstance]);
+                showToast('Clase eliminada', 'warning');
                 await loadAllInstances();
-                handleCloseEditor();
-            } else {
-                showToast(data.error || 'Error al cancelar', 'error');
+                setSelectedInstance(null);
             }
-        } catch (err: any) {
-            showToast('Error: ' + err.message, 'error');
+        } catch (err) {
+            showToast('Error al eliminar', 'error');
         } finally {
             setLoading(false);
         }
     };
 
-    // Reprogramar clase (mover a otra fecha manteniendo permisos)
-    const handleReschedule = () => {
-        if (!selectedInstance) return;
-        showToast('Modifica la fecha/hora y guarda. Los permisos del Meet se mantienen.', 'info');
-    };
+    // Restore
+    const handleRestore = async (instance: CalendarEvent) => {
+        // Assuming we store subject somewhere, if not we default.Ideally deletedInstances stores subject too.
+        // For simplicity reusing logic. The updated interface deletedInstances probably needs subject.
+        const subject = instance.subjectName || 'Matemáticas';
 
-    // Restaurar instancia
-    const handleRestoreInstance = async (instance: CalendarEvent) => {
-        const subject = instance.recurringEventId as Subject || 'Matemáticas';
-
-        setLoading(true);
         try {
             const res = await fetch('/api/events/instance', {
                 method: 'PUT',
@@ -222,46 +200,37 @@ export default function Home() {
                     originalEnd: instance.end.dateTime
                 })
             });
-
             const data = await res.json();
-
             if (data.success) {
-                showToast('✓ Clase restaurada', 'success');
                 setDeletedInstances(prev => prev.filter(i => i.id !== instance.id));
-                await loadAllInstances();
-            } else {
-                showToast(data.error || 'Error al restaurar', 'error');
+                loadAllInstances();
+                showToast('Clase restaurada', 'success');
             }
-        } catch (err: any) {
-            showToast('Error: ' + err.message, 'error');
-        } finally {
-            setLoading(false);
+        } catch (e) { }
+    }
+
+    // Navigation Helpers
+    const isSameDay = (d1: Date, d2: Date) =>
+        d1.getFullYear() === d2.getFullYear() &&
+        d1.getMonth() === d2.getMonth() &&
+        d1.getDate() === d2.getDate();
+
+    const getWeekDays = (start: Date) =>
+        Array.from({ length: 7 }, (_, i) => {
+            const d = new Date(start);
+            d.setDate(start.getDate() + i);
+            return d;
+        });
+
+    const getEventsForDay = (day: Date, subject?: Subject) => {
+        if (subject) {
+            return (allInstances[subject] || []).filter(e => isSameDay(new Date(e.start.dateTime), day))
+                .map(e => ({ ...e, subjectName: subject }));
         }
-    };
-
-    // Helpers de fecha
-    const formatTimeStr = (dateStr: string) => {
-        return new Date(dateStr).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
-    };
-
-    const formatDateShort = (dateStr: string) => {
-        return new Date(dateStr).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' });
-    };
-
-    const isSameDay = (date1: Date, date2: Date) => {
-        return date1.getFullYear() === date2.getFullYear() &&
-            date1.getMonth() === date2.getMonth() &&
-            date1.getDate() === date2.getDate();
-    };
-
-    const getWeekDays = (startDate: Date) => {
-        const days = [];
-        for (let i = 0; i < 7; i++) {
-            const day = new Date(startDate);
-            day.setDate(startDate.getDate() + i);
-            days.push(day);
-        }
-        return days;
+        return Object.entries(allInstances).flatMap(([subj, instances]) =>
+            instances.filter(e => isSameDay(new Date(e.start.dateTime), day))
+                .map(e => ({ ...e, subjectName: subj as Subject }))
+        );
     };
 
     const getMonthDays = (date: Date) => {
@@ -269,454 +238,252 @@ export default function Home() {
         const month = date.getMonth();
         const firstDay = new Date(year, month, 1);
         const lastDay = new Date(year, month + 1, 0);
-        const days: { date: Date; isCurrentMonth: boolean }[] = [];
+        const days = [];
 
-        const firstDayOfWeek = firstDay.getDay();
+        // Days from prev month
+        const firstDayOfWeek = firstDay.getDay(); // 0(Sun)
         for (let i = firstDayOfWeek; i > 0; i--) {
-            days.push({ date: new Date(year, month, 1 - i), isCurrentMonth: false });
+            days.push({ date: new Date(year, month, 1 - i), current: false });
         }
-
+        // Current month
         for (let i = 1; i <= lastDay.getDate(); i++) {
-            days.push({ date: new Date(year, month, i), isCurrentMonth: true });
+            days.push({ date: new Date(year, month, i), current: true });
         }
-
-        const remaining = 42 - days.length;
-        for (let i = 1; i <= remaining; i++) {
-            days.push({ date: new Date(year, month + 1, i), isCurrentMonth: false });
+        // Next month filling
+        while (days.length % 7 !== 0) {
+            days.push({ date: new Date(year, month + 1, days.length - lastDay.getDate() - firstDayOfWeek + 1), current: false });
         }
-
         return days;
     };
 
-    const getEventsForDay = (day: Date, subject?: Subject): (CalendarEvent & { subjectName?: Subject })[] => {
-        if (subject) {
-            return (allInstances[subject] || []).filter(e =>
-                isSameDay(new Date(e.start.dateTime), day)
-            );
-        }
-        return Object.entries(allInstances).flatMap(([subj, instances]) =>
-            instances.filter(e => isSameDay(new Date(e.start.dateTime), day)).map(e => ({
-                ...e,
-                subjectName: subj as Subject
-            }))
-        );
-    };
-
-    const navigateWeek = (direction: number) => {
-        setCurrentWeekStart(prev => {
-            const newDate = new Date(prev);
-            newDate.setDate(prev.getDate() + (direction * 7));
-            return newDate;
-        });
-    };
-
-    const navigateMonth = (direction: number) => {
-        setCurrentMonth(prev => {
-            const newDate = new Date(prev);
-            newDate.setMonth(prev.getMonth() + direction);
-            return newDate;
-        });
-    };
-
-    const goToToday = () => {
-        const today = new Date();
-        setCurrentMonth(today);
-        const dayOfWeek = today.getDay();
-        const diff = today.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
-        setCurrentWeekStart(new Date(new Date().setDate(diff)));
-    };
-
-    const subjects = getSubjectsArray();
     const weekDays = getWeekDays(currentWeekStart);
     const monthDays = getMonthDays(currentMonth);
-    const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+    const subjects = getSubjectsArray();
 
-    // =========================================
-    // RENDER
-    // =========================================
+    // --- RENDER ---
     return (
         <div className="app-container">
-            {/* Toast Notification */}
+            {/* --- Notifications --- */}
             {toast && (
-                <div className={`toast toast-${toast.type} fade-in`}>
-                    <span>{toast.text}</span>
+                <div style={{
+                    position: 'fixed', top: '20px', right: '20px', zIndex: 1000,
+                    background: toast.type === 'error' ? '#ef4444' : toast.type === 'warning' ? '#f59e0b' : '#10b981',
+                    color: 'white', padding: '1rem', borderRadius: '12px', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)'
+                }}>
+                    {toast.text}
                 </div>
             )}
 
-            {/* Futuristic Clock */}
-            <div className="futuristic-clock">
-                <div className="clock-time">
-                    {currentTime ? (
-                        <>
-                            {currentTime.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
-                            <span className="seconds">:{currentTime.getSeconds().toString().padStart(2, '0')}</span>
-                        </>
-                    ) : (
-                        <span>--:--</span>
-                    )}
-                </div>
-
-                <div className="clock-actions">
-                    <button className="clock-btn" onClick={goToToday}>
-                        📍 Hoy
-                    </button>
-                    <button className="clock-btn" onClick={loadAllInstances} disabled={loading}>
-                        {loading ? '⏳' : '🔄'} Sincronizar
-                    </button>
-                    {deletedInstances.length > 0 && (
-                        <button className="clock-btn" onClick={() => setShowDeletedPanel(!showDeletedPanel)}>
-                            🗑️ {deletedInstances.length}
-                        </button>
-                    )}
-                </div>
-
-                <div className="clock-date">
-                    {currentTime ? (
-                        <>
-                            <div className="day-name">
-                                {currentTime.toLocaleDateString('es-CO', { weekday: 'long' })}
-                            </div>
-                            <div className="full-date">
-                                {currentTime.toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' })}
-                            </div>
-                        </>
-                    ) : (
-                        <div className="full-date">Cargando...</div>
-                    )}
-                </div>
+            {/* --- Header & Clock --- */}
+            <div className="header-wrapper">
+                <h1 className="main-title">Manager de Eventos</h1>
+                <p className="subtitle">Gestión inteligente de clases y recursos</p>
             </div>
 
-            {/* Título */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                <h1 style={{ fontSize: '1.5rem', fontWeight: '600' }}>
-                    📅 Calendario de Clases
-                </h1>
-                <span className="status-badge connected">
-                    <span className="status-dot"></span>
-                    Conectado
-                </span>
-            </div>
-
-            {/* Panel de eliminados */}
-            {showDeletedPanel && deletedInstances.length > 0 && (
-                <div className="deleted-panel fade-in">
-                    <div className="deleted-panel-header">
-                        <span>🗑️</span>
-                        <span>Clases Canceladas ({deletedInstances.length})</span>
+            <div className="clock-card">
+                <div className="time-display">
+                    {currentTime ? currentTime.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) : '--:--'}
+                </div>
+                <div className="date-display">
+                    <div className="date-day">
+                        {currentTime ? currentTime.toLocaleDateString('es-CO', { weekday: 'long' }) : 'Loading'}
                     </div>
-                    <div className="deleted-items">
-                        {deletedInstances.map(inst => (
-                            <div key={inst.id} className="deleted-item">
-                                <div className="deleted-item-info">
-                                    <strong>{inst.summary}</strong>
-                                    <span style={{ marginLeft: '0.5rem', color: 'var(--text-secondary)' }}>
-                                        {formatDateShort(inst.start.dateTime)}
-                                    </span>
-                                </div>
-                                <button
-                                    className="btn btn-success btn-sm"
-                                    onClick={() => handleRestoreInstance(inst)}
-                                    disabled={loading}
-                                >
-                                    ♻️ Restaurar
-                                </button>
+                    <div className="date-full">
+                        {currentTime ? currentTime.toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' }) : ''}
+                    </div>
+                </div>
+            </div>
+
+            {/* --- Controls --- */}
+            <div className="glass-panel" style={{ padding: '1rem', marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <button
+                        className={`btn ${viewMode === 'monthly' && !selectedSubject ? 'btn-primary' : 'btn-ghost'}`}
+                        onClick={() => { setViewMode('monthly'); setSelectedSubject(null); }}
+                    > 📅 Mes </button>
+                    {subjects.map(s => (
+                        <button
+                            key={s.name}
+                            className={`subject-badge ${selectedSubject === s.name ? 'active' : ''}`}
+                            style={{
+                                background: selectedSubject === s.name ? 'rgba(255,255,255,0.1)' : 'transparent',
+                                border: selectedSubject === s.name ? `1px solid ${s.color}` : '1px solid transparent'
+                            }}
+                            onClick={() => { setViewMode('weekly'); setSelectedSubject(s.name); }}
+                        >
+                            <span className="subject-dot" style={{ background: s.color }}></span>
+                            {s.displayName}
+                        </button>
+                    ))}
+                </div>
+
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <button className="btn btn-ghost" onClick={loadAllInstances}>🔄 Sync</button>
+                    {deletedInstances.length > 0 &&
+                        <button className="btn btn-ghost" onClick={() => setShowDeletedPanel(!showDeletedPanel)}>🗑️ {deletedInstances.length}</button>
+                    }
+                </div>
+            </div>
+
+            {/* --- Deleted Panel --- */}
+            {showDeletedPanel && (
+                <div className="glass-panel" style={{ padding: '1rem', marginBottom: '1.5rem', background: 'rgba(239, 68, 68, 0.1)' }}>
+                    <h4>Papelera</h4>
+                    <div style={{ display: 'flex', gap: '1rem', overflowX: 'auto', padding: '0.5rem' }}>
+                        {deletedInstances.map((del, i) => (
+                            <div key={i} className="day-card" style={{ minWidth: '200px', minHeight: 'auto' }}>
+                                <div className="event-title">{del.summary}</div>
+                                <div className="event-time">{new Date(del.start.dateTime).toLocaleDateString()}</div>
+                                <button className="btn btn-primary" style={{ fontSize: '0.8rem', padding: '0.2rem 0.5rem', marginTop: '0.5rem' }} onClick={() => handleRestore(del)}>Recuperar</button>
                             </div>
                         ))}
                     </div>
                 </div>
             )}
 
-            {/* Navigation Tabs */}
-            <div className="nav-tabs">
-                <button
-                    className={`nav-tab ${viewMode === 'monthly' && !selectedSubject ? 'active' : ''}`}
-                    onClick={() => { setViewMode('monthly'); setSelectedSubject(null); handleCloseEditor(); }}
-                >
-                    📆 Vista Mensual
-                </button>
-                {subjects.map(subj => (
-                    <button
-                        key={subj.name}
-                        className={`nav-tab ${viewMode === 'weekly' && selectedSubject === subj.name ? 'active' : ''}`}
-                        onClick={() => { setViewMode('weekly'); setSelectedSubject(subj.name); handleCloseEditor(); }}
-                    >
-                        <span className="tab-dot" style={{ background: subj.color }}></span>
-                        {subj.displayName}
-                    </button>
-                ))}
-            </div>
+            {/* --- Calendar Wrapper --- */}
+            <div className="glass-panel calendar-wrapper">
+                <div className="calendar-header">
+                    <button className="nav-btn" onClick={() => viewMode === 'monthly' ? setCurrentMonth(new Date(currentMonth.setMonth(currentMonth.getMonth() - 1))) : setCurrentWeekStart(new Date(currentWeekStart.setDate(currentWeekStart.getDate() - 7)))}>←</button>
 
-            {/* Main Content */}
-            <div className="layout-split">
-                {/* Calendar Area */}
-                <div className="calendar-container">
-                    {/* Calendar Header */}
-                    <div className="calendar-header">
-                        <div className="calendar-nav">
-                            <button className="calendar-nav-btn" onClick={() => viewMode === 'monthly' ? navigateMonth(-1) : navigateWeek(-1)}>
-                                ←
-                            </button>
-                        </div>
-
-                        <h2 className="calendar-title">
-                            {viewMode === 'monthly'
-                                ? currentMonth.toLocaleDateString('es-CO', { month: 'long', year: 'numeric' })
-                                : `${weekDays[0].toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })} - ${weekDays[6].toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })}`
-                            }
-                        </h2>
-
-                        <div className="calendar-nav">
-                            <button className="calendar-nav-btn" onClick={() => viewMode === 'monthly' ? navigateMonth(1) : navigateWeek(1)}>
-                                →
-                            </button>
-                        </div>
+                    <div className="calendar-title">
+                        {viewMode === 'monthly'
+                            ? currentMonth.toLocaleDateString('es-CO', { month: 'long', year: 'numeric' })
+                            : `${weekDays[0].getDate()} - ${weekDays[6].getDate()} ${weekDays[6].toLocaleDateString('es-CO', { month: 'short' })}`
+                        }
                     </div>
 
-                    {/* Legend */}
-                    {viewMode === 'monthly' && (
-                        <div className="calendar-legend">
-                            {subjects.map(subj => (
-                                <div key={subj.name} className="legend-item">
-                                    <div className="legend-dot" style={{ background: subj.color }}></div>
-                                    <span>{subj.displayName}</span>
-                                </div>
-                            ))}
-                        </div>
-                    )}
+                    <button className="nav-btn" onClick={() => viewMode === 'monthly' ? setCurrentMonth(new Date(currentMonth.setMonth(currentMonth.getMonth() + 1))) : setCurrentWeekStart(new Date(currentWeekStart.setDate(currentWeekStart.getDate() + 7)))}>→</button>
+                </div>
 
-                    {/* Meet Link for Weekly View */}
-                    {viewMode === 'weekly' && selectedSubject && allInstances[selectedSubject]?.[0]?.hangoutLink && (
-                        <div className="protected-field" style={{ marginBottom: '1rem', textAlign: 'center' }}>
-                            <span style={{ fontWeight: '600', color: '#059669' }}>🎥 Meet Fijo: </span>
-                            <a href={allInstances[selectedSubject][0].hangoutLink} target="_blank" rel="noopener noreferrer" className="meet-link">
-                                {allInstances[selectedSubject][0].hangoutLink}
-                            </a>
-                        </div>
-                    )}
-
-                    {loading ? (
-                        <div className="empty-state">
-                            <div className="empty-state-icon loading">⏳</div>
-                            <p>Cargando calendario...</p>
-                        </div>
-                    ) : viewMode === 'monthly' ? (
-                        /* Monthly Grid */
-                        <div className="calendar-grid monthly">
-                            {dayNames.map(day => (
-                                <div key={day} className="calendar-day-header">{day}</div>
-                            ))}
-                            {monthDays.map(({ date, isCurrentMonth }, idx) => {
-                                const events = getEventsForDay(date);
-                                const isToday = isSameDay(date, new Date());
-
-                                return (
-                                    <div
-                                        key={idx}
-                                        className={`calendar-day ${isToday ? 'today' : ''} ${!isCurrentMonth ? 'other-month' : ''}`}
-                                    >
-                                        <div className="calendar-day-number">{date.getDate()}</div>
-                                        {events.slice(0, 3).map((event, i) => {
-                                            const subjectData = subjects.find(s => s.name === event.subjectName);
-                                            return (
-                                                <div
-                                                    key={i}
-                                                    className="calendar-event"
-                                                    style={{ background: subjectData?.color || '#6366f1' }}
-                                                    onClick={() => event.subjectName && handleSelectInstance(event, event.subjectName)}
-                                                >
-                                                    {formatTimeStr(event.start.dateTime)} {subjectData?.icon}
-                                                </div>
-                                            );
-                                        })}
-                                        {events.length > 3 && (
-                                            <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-                                                +{events.length - 3} más
-                                            </div>
-                                        )}
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    ) : (
-                        /* Weekly Grid */
-                        <div className="calendar-grid weekly">
-                            {weekDays.map((day, idx) => {
-                                const events = selectedSubject ? getEventsForDay(day, selectedSubject) : [];
-                                const isToday = isSameDay(day, new Date());
-
-                                return (
-                                    <div key={idx} className={`weekly-day ${isToday ? 'today' : ''}`}>
-                                        <div className="weekly-day-header">
-                                            <div className="weekly-day-name">{dayNames[day.getDay()]}</div>
-                                            <div className="weekly-day-number">{day.getDate()}</div>
-                                        </div>
-                                        {events.map((event, i) => (
+                {/* --- Grid View --- */}
+                {viewMode === 'monthly' ? (
+                    <div className="calendar-grid" style={{ gridTemplateColumns: 'repeat(7, 1fr)' }}>
+                        {['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'].map(d => (
+                            <div key={d} style={{ textAlign: 'center', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>{d}</div>
+                        ))}
+                        {monthDays.map((day, idx) => {
+                            const events = getEventsForDay(day.date);
+                            const isToday = isSameDay(day.date, new Date());
+                            return (
+                                <div key={idx} className={`day-card ${isToday ? 'today' : ''}`} style={{ opacity: day.current ? 1 : 0.4 }}>
+                                    <div className="day-number" style={{ marginBottom: '0.5rem' }}>{day.date.getDate()}</div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                        {events.slice(0, 3).map((ev, i) => (
                                             <div
                                                 key={i}
-                                                className="weekly-event"
-                                                style={{ background: selectedSubject ? SUBJECTS[selectedSubject].color : '#6366f1' }}
-                                                onClick={() => selectedSubject && handleSelectInstance(event, selectedSubject)}
+                                                className="event-item"
+                                                style={{ borderLeftColor: SUBJECTS[ev.subjectName as Subject]?.color, fontSize: '0.7rem' }}
+                                                onClick={() => handleSelectInstance(ev, ev.subjectName as Subject)}
                                             >
-                                                <div className="weekly-event-time">{formatTimeStr(event.start.dateTime)}</div>
-                                                <div className="weekly-event-title">{event.summary}</div>
+                                                {ev.summary}
+                                            </div>
+                                        ))}
+                                        {events.length > 3 && <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>+{events.length - 3} más</div>}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                ) : (
+                    /* Weekly View (Responsive) */
+                    <div className="calendar-grid weekly">
+                        {weekDays.map((day, idx) => {
+                            const events = getEventsForDay(day, selectedSubject || undefined);
+                            const isToday = isSameDay(day, new Date());
+                            return (
+                                <div key={idx} className={`day-card ${isToday ? 'today' : ''}`}>
+                                    <div className="day-header">
+                                        <span className="day-name">{day.toLocaleDateString('es-CO', { weekday: 'short' })}</span>
+                                        <span className="day-number">{day.getDate()}</span>
+                                    </div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                        {events.map((ev, i) => (
+                                            <div
+                                                key={i}
+                                                className="event-item"
+                                                style={{ borderLeftColor: SUBJECTS[ev.subjectName as Subject]?.color }}
+                                                onClick={() => handleSelectInstance(ev, ev.subjectName as Subject)}
+                                            >
+                                                <div className="event-time">
+                                                    {new Date(ev.start.dateTime).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
+                                                </div>
+                                                <div className="event-title">{ev.summary}</div>
                                             </div>
                                         ))}
                                         {events.length === 0 && (
-                                            <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', textAlign: 'center', marginTop: '2rem' }}>
+                                            <div style={{ textAlign: 'center', padding: '2rem 0', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
                                                 Sin clases
                                             </div>
                                         )}
                                     </div>
-                                );
-                            })}
-                        </div>
-                    )}
-                </div>
-
-                {/* Editor Panel */}
-                {selectedInstance && selectedInstanceSubject ? (
-                    <div className="editor-panel fade-in">
-                        <div className="editor-header" style={{ background: `linear-gradient(135deg, ${SUBJECTS[selectedInstanceSubject].color}, ${SUBJECTS[selectedInstanceSubject].color}dd)` }}>
-                            <h3>
-                                {SUBJECTS[selectedInstanceSubject].icon} Editar Clase
-                            </h3>
-                            <span className="editor-header-badge">
-                                {formatDateShort(selectedInstance.start.dateTime)}
-                            </span>
-                        </div>
-
-                        <div className="editor-body">
-                            {/* Quick Actions */}
-                            <div className="editor-section">
-                                <div className="editor-section-title">⚡ Acciones Rápidas</div>
-                                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                                    <button className="btn btn-ghost btn-sm" onClick={handleReschedule}>
-                                        📅 Reprogramar
-                                    </button>
-                                    <button className="btn btn-ghost btn-sm" onClick={() => selectedInstance.htmlLink && window.open(selectedInstance.htmlLink, '_blank')}>
-                                        🔗 Ver en Calendar
-                                    </button>
-                                    <button className="btn btn-ghost btn-sm" onClick={() => selectedInstance.hangoutLink && window.open(selectedInstance.hangoutLink, '_blank')}>
-                                        🎥 Abrir Meet
-                                    </button>
                                 </div>
-                            </div>
-
-                            {/* Form Fields */}
-                            <div className="editor-section">
-                                <div className="editor-section-title">📝 Información</div>
-
-                                <div className="form-group">
-                                    <label className="form-label">Título</label>
-                                    <input
-                                        type="text"
-                                        className="form-input"
-                                        value={editForm.summary}
-                                        onChange={(e) => setEditForm({ ...editForm, summary: e.target.value })}
-                                        placeholder="Nombre de la clase"
-                                    />
-                                </div>
-
-                                <div className="form-group">
-                                    <label className="form-label">Descripción</label>
-                                    <textarea
-                                        className="form-input form-textarea"
-                                        rows={2}
-                                        value={editForm.description}
-                                        onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-                                        placeholder="Notas, temas a tratar..."
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="editor-section">
-                                <div className="editor-section-title">🕐 Horario</div>
-
-                                <div className="form-group">
-                                    <label className="form-label">Fecha</label>
-                                    <input
-                                        type="date"
-                                        className="form-input font-mono"
-                                        value={editForm.date}
-                                        onChange={(e) => setEditForm({ ...editForm, date: e.target.value })}
-                                    />
-                                </div>
-
-                                <div className="form-row">
-                                    <div className="form-group">
-                                        <label className="form-label">Inicio</label>
-                                        <input
-                                            type="time"
-                                            className="form-input font-mono"
-                                            value={editForm.startTime}
-                                            onChange={(e) => setEditForm({ ...editForm, startTime: e.target.value })}
-                                        />
-                                    </div>
-                                    <div className="form-group">
-                                        <label className="form-label">Fin</label>
-                                        <input
-                                            type="time"
-                                            className="form-input font-mono"
-                                            value={editForm.endTime}
-                                            onChange={(e) => setEditForm({ ...editForm, endTime: e.target.value })}
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Protected Meet Link */}
-                            <div className="protected-field">
-                                <div className="protected-header">
-                                    <span className="protected-title">
-                                        🎥 Google Meet
-                                    </span>
-                                    <span className="protected-badge">
-                                        🔒 Fijo
-                                    </span>
-                                </div>
-                                {selectedInstance.hangoutLink ? (
-                                    <a href={selectedInstance.hangoutLink} target="_blank" rel="noopener noreferrer" className="meet-link">
-                                        {selectedInstance.hangoutLink}
-                                    </a>
-                                ) : (
-                                    <span style={{ color: 'var(--text-muted)' }}>Sin enlace</span>
-                                )}
-                                <div className="protected-badges">
-                                    <span className="feature-badge">✓ Coorganizadores</span>
-                                    <span className="feature-badge">✓ Oyentes</span>
-                                    <span className="feature-badge">✓ Configuración</span>
-                                </div>
-                            </div>
-
-                            {/* Actions */}
-                            <div className="editor-actions">
-                                <button className="btn btn-outline" onClick={handleCloseEditor}>
-                                    Cancelar
-                                </button>
-                                <button className="btn btn-danger" onClick={handleDeleteInstance} disabled={loading}>
-                                    🗑️ Eliminar
-                                </button>
-                                <button className="btn btn-success btn-full" onClick={handleSaveInstance} disabled={loading}>
-                                    {loading ? '⏳ Guardando...' : '💾 Guardar Cambios'}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                ) : (
-                    <div className="card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '400px' }}>
-                        <div className="empty-state">
-                            <div className="empty-state-icon">📝</div>
-                            <h4>Selecciona una clase</h4>
-                            <p>Haz clic en cualquier evento del calendario para ver detalles y editarlo</p>
-                        </div>
+                            );
+                        })}
                     </div>
                 )}
             </div>
 
-            {/* Footer */}
-            <footer style={{ textAlign: 'center', marginTop: '2rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                <p>Seamos Genios © 2026 — Sistema de Gestión de Clases</p>
-            </footer>
+            {/* --- Editor Modal --- */}
+            {selectedInstance && (
+                <div className="editor-overlay">
+                    <div className="editor-card">
+                        <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <h3>Editar Clase</h3>
+                            <button onClick={() => setSelectedInstance(null)} style={{ background: 'none', border: 'none', color: 'white', fontSize: '1.5rem', cursor: 'pointer' }}>×</button>
+                        </div>
+
+                        <div style={{ padding: '1.5rem' }}>
+                            {/* Summary */}
+                            <div style={{ marginBottom: '1rem' }}>
+                                <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-secondary)' }}>Título</label>
+                                <input
+                                    className="glass-panel"
+                                    style={{ width: '100%', padding: '0.8rem', color: 'white', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-color)' }}
+                                    value={editForm.summary}
+                                    onChange={e => setEditForm({ ...editForm, summary: e.target.value })}
+                                />
+                            </div>
+
+                            {/* Time */}
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                                <div>
+                                    <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-secondary)' }}>Inicio</label>
+                                    <input
+                                        type="time"
+                                        className="glass-panel"
+                                        style={{ width: '100%', padding: '0.8rem', color: 'white', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-color)' }}
+                                        value={editForm.startTime}
+                                        onChange={e => setEditForm({ ...editForm, startTime: e.target.value })}
+                                    />
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-secondary)' }}>Fin</label>
+                                    <input
+                                        type="time"
+                                        className="glass-panel"
+                                        style={{ width: '100%', padding: '0.8rem', color: 'white', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-color)' }}
+                                        value={editForm.endTime}
+                                        onChange={e => setEditForm({ ...editForm, endTime: e.target.value })}
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Actions */}
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '2rem' }}>
+                                <button className="btn" style={{ background: 'var(--bg-elevated)', color: 'white' }} onClick={handleDeleteInstance}>Eliminar</button>
+                                <button className="btn btn-primary" onClick={handleSaveInstance} disabled={loading}>{loading ? 'Guardando...' : 'Guardar'}</button>
+                            </div>
+
+                            {selectedInstance.hangoutLink && (
+                                <div style={{ marginTop: '1.5rem', textAlign: 'center' }}>
+                                    <a href={selectedInstance.hangoutLink} target="_blank" style={{ color: 'var(--accent-primary)', textDecoration: 'none' }}>🎥 Unirse al Meet</a>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
