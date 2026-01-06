@@ -205,29 +205,72 @@ export default function Home() {
                 <div style={{ color: 'var(--primary-neon)', letterSpacing: '2px', fontSize: '0.8rem', marginTop: '0.5rem' }}>SISTEMA EN LÍNEA</div>
             </header>
 
-            {/* CONTROLES */}
-            <div className="glass" style={{ padding: '1rem', borderRadius: '16px', marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
-                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                    <button className={`btn ${viewMode === 'monthly' && !selectedSubject ? 'btn-neon' : 'btn-ghost'}`} onClick={() => { setViewMode('monthly'); setSelectedSubject(null) }}>MES</button>
+            {/* CONTROLES AVANZADOS */}
+            <div className="glass" style={{ padding: '1.25rem', borderRadius: '16px', marginBottom: '2rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+
+                {/* FILA 1: MODOS DE VISTA + SINCRONIZAR */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '1rem' }}>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <span style={{ fontSize: '0.75rem', color: '#666', textTransform: 'uppercase', letterSpacing: '1px', alignSelf: 'center', marginRight: '0.5rem' }}>VISTA:</span>
+                        <button
+                            className={`btn ${viewMode === 'monthly' ? 'btn-neon' : 'btn-ghost'}`}
+                            onClick={() => setViewMode('monthly')}
+                            style={{ padding: '0.5rem 1.5rem', fontSize: '0.9rem' }}
+                        >
+                            MES
+                        </button>
+                        <button
+                            className={`btn ${viewMode === 'weekly' ? 'btn-neon' : 'btn-ghost'}`}
+                            onClick={() => setViewMode('weekly')}
+                            style={{ padding: '0.5rem 1.5rem', fontSize: '0.9rem' }}
+                        >
+                            SEMANA
+                        </button>
+                    </div>
+
+                    <button className="btn btn-ghost" onClick={loadAllInstances} disabled={loading} style={{ fontSize: '0.8rem' }}>
+                        {loading ? '⏳ ACTUALIZANDO...' : '🔄 SINCRONIZAR'}
+                    </button>
+                </div>
+
+                {/* FILA 2: FILTROS DE MATERIA */}
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                    <span style={{ fontSize: '0.75rem', color: '#666', textTransform: 'uppercase', letterSpacing: '1px', marginRight: '0.5rem' }}>FILTRO:</span>
+
+                    <button
+                        onClick={() => setSelectedSubject(null)}
+                        style={{
+                            padding: '0.4rem 1rem', borderRadius: '8px', border: '1px solid #333',
+                            background: selectedSubject === null ? '#fff' : 'transparent',
+                            color: selectedSubject === null ? '#000' : '#888',
+                            cursor: 'pointer', fontSize: '0.85rem', fontWeight: selectedSubject === null ? 700 : 400,
+                            transition: 'all 0.2s'
+                        }}
+                    >
+                        TODAS
+                    </button>
+
                     {subjects.map(s => (
                         <button key={s.name}
-                            onClick={() => { setViewMode('weekly'); setSelectedSubject(s.name) }}
+                            onClick={() => setSelectedSubject(s.name === selectedSubject ? null : s.name)}
                             style={{
-                                padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid #333',
+                                padding: '0.4rem 1rem', borderRadius: '8px', border: `1px solid ${selectedSubject === s.name ? s.color : '#333'}`,
                                 background: selectedSubject === s.name ? s.color : 'transparent',
                                 color: selectedSubject === s.name ? 'white' : '#888',
-                                cursor: 'pointer', fontSize: '0.85rem'
+                                cursor: 'pointer', fontSize: '0.85rem', fontWeight: 500,
+                                display: 'flex', alignItems: 'center', gap: '6px',
+                                transition: 'all 0.2s'
                             }}
                         >
+                            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: s.color, boxShadow: selectedSubject === s.name ? '0 0 5px white' : 'none' }}></span>
                             {s.displayName}
                         </button>
                     ))}
                 </div>
-                <button className="btn btn-ghost" onClick={loadAllInstances} disabled={loading}>{loading ? '⏳' : '🔄'} SINCRONIZAR</button>
             </div>
 
             {/* BANNER MEET */}
-            {viewMode === 'weekly' && selectedSubject && allInstances[selectedSubject]?.[0]?.hangoutLink && (
+            {selectedSubject && allInstances[selectedSubject]?.[0]?.hangoutLink && (
                 <div className="meet-banner glass">
                     <div>
                         <h3 style={{ margin: 0, color: 'white', fontFamily: 'var(--font-display)' }}>SALA VIRTUAL: {SUBJECTS[selectedSubject].displayName}</h3>
