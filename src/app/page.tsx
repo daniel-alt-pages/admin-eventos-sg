@@ -143,6 +143,16 @@ export default function Home() {
         setShowSuggestions(false);
     };
 
+    // Sistema de Toasts
+    interface Toast { id: number; msg: string; type: 'success' | 'error'; }
+    const [toasts, setToasts] = useState<Toast[]>([]);
+
+    const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
+        const id = Date.now();
+        setToasts(prev => [...prev, { id, msg, type }]);
+        setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000);
+    };
+
     const handleSave = async () => {
         if (!selectedInstance) return;
         setLoading(true);
@@ -157,13 +167,16 @@ export default function Home() {
                     subject: selectedInstance.subjectName,
                     eventId: selectedInstance.id,
                     summary: editForm.summary,
-                    start: startDT.toISOString(), end: endDT.toISOString()
+                    start: startDT.toISOString(), end: endDT.toISOString(),
+                    description: editForm.description
                 })
             });
             saveTitleToHistory(editForm.summary);
             await loadAllInstances();
             setSelectedInstance(null);
-        } catch (e) { } finally { setLoading(false); }
+            showToast('Evento actualizado correctamente');
+        } catch (e) { showToast('Error al guardar', 'error'); }
+        finally { setLoading(false); }
     };
 
     const handleDelete = async () => {
@@ -178,7 +191,9 @@ export default function Home() {
             });
             await loadAllInstances();
             setSelectedInstance(null);
-        } catch (e) { } finally { setLoading(false); }
+            showToast('Evento eliminado');
+        } catch (e) { showToast('Error al eliminar', 'error'); }
+        finally { setLoading(false); }
     };
 
     // Helpers calendario
@@ -283,45 +298,147 @@ export default function Home() {
                 </div>
             )}
 
-            {/* CALENDARIO */}
+            {/* NAVEGACIÓN DE FECHAS */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', padding: '0 0.5rem' }}>
+                <button
+                    onClick={() => viewMode === 'monthly'
+                        ? setCurrentMonth(new Date(currentMonth.setMonth(currentMonth.getMonth() - 1)))
+                        : setCurrentWeekStart(new Date(currentWeekStart.setDate(currentWeekStart.getDate() - 7)))}
+                    className="btn btn-ghost"
+                    style={{ fontSize: '1.5rem', padding: '0.5rem 1rem' }}
+                >
+                    ‹
+                </button>
+
+                <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '1.5rem', fontFamily: 'var(--font-display)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px' }}>
+                        {viewMode === 'monthly'
+                            ? currentMonth.toLocaleDateString('es-CO', { month: 'long', year: 'numeric' })
+                            : `Semana ${currentWeekStart.getDate()} - ${new Date(currentWeekStart.getTime() + 6 * 86400000).getDate()} ${currentWeekStart.toLocaleDateString('es-CO', { month: 'short' })}`
+                        }
+                    </div>
+                    {((viewMode === 'monthly' && currentMonth.getMonth() !== new Date().getMonth()) ||
+                        (viewMode === 'weekly' && currentWeekStart.toDateString() !== new Date(new Date().setDate(new Date().getDate() - new Date().getDay() + 1)).toDateString())) && (
+                            <button
+                                onClick={() => {
+                                    setCurrentMonth(new Date());
+                                    const today = new Date();
+                                    const dayOfWeek = today.getDay();
+                                    const diff = today.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+                                    setCurrentWeekStart(new Date(today.setDate(diff)));
+                                }}
+                                style={{
+                                    background: 'none', border: 'none', color: 'var(--primary-neon)',
+                                    cursor: 'pointer', fontSize: '0.8rem', marginTop: '0.25rem',
+                                    textDecoration: 'underline'
+                                }}
+                            >
+                                Volver a Hoy
+                            </button>
+                        )}
+                </div>
+
+                <button
+                    onClick={() => viewMode === 'monthly'
+                        ? setCurrentMonth(new Date(currentMonth.setMonth(currentMonth.getMonth() + 1)))
+                        : setCurrentWeekStart(new Date(currentWeekStart.setDate(currentWeekStart.getDate() + 7)))}
+                    className="btn btn-ghost"
+                    style={{ fontSize: '1.5rem', padding: '0.5rem 1rem' }}
+                >
+                    ›
+                </button>
+            </div>
+
+            {/* ENCABEZADOS DE DÍA (SOLO MES) */}
+            {viewMode === 'monthly' && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '1rem', marginBottom: '0.5rem', padding: '0 0.5rem' }}>
+                    {['LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB', 'DOM'].map(d => (
+                        <div key={d} style={{ color: '#666', fontSize: '0.75rem', fontWeight: 700, textAlign: 'center' }}>{d}</div>
+                    ))}
+                </div>
+            )}
+
+            {/* CALENDARIO GRID */}
             <div className={`cal-grid ${viewMode}`}>
                 {viewMode === 'monthly' ? (
-                    Array.from({ length: 31 }, (_, i) => {
-                        const d = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), i + 1);
-                        if (d.getMonth() !== currentMonth.getMonth()) return null;
-                        const events = getEvents(d);
-                        const isToday = d.toDateString() === new Date().toDateString();
-                        return (
-                            <div key={i} className={`day-panel glass ${isToday ? 'today' : ''}`}>
-                                <div className="day-header">
-                                    <span className="day-name">{d.toLocaleDateString('es-CO', { weekday: 'short' })}</span>
-                                    <span className="day-num">{d.getDate()}</span>
-                                </div>
-                                {events.slice(0, 3).map((ev, k) => (
-                                    <div key={k} className="event-chip" style={{ borderLeftColor: SUBJECTS[ev.subjectName as Subject]?.color }} onClick={() => handleSelectInstance(ev, ev.subjectName as Subject)}>
-                                        <div className="chip-time">{new Date(ev.start.dateTime).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}</div>
-                                        <div className="chip-title">{ev.summary}</div>
+                    (() => {
+                        const year = currentMonth.getFullYear();
+                        const month = currentMonth.getMonth();
+                        const firstDay = new Date(year, month, 1);
+                        const daysInMonth = new Date(year, month + 1, 0).getDate();
+                        // Ajustar para empezar en Lunes (0=Lunes en mi lógica de render, pero getDay() 0=Dom)
+                        let startPadding = firstDay.getDay() - 1;
+                        if (startPadding === -1) startPadding = 6;
+
+                        const days = [];
+                        // Relleno inicial
+                        for (let i = 0; i < startPadding; i++) {
+                            days.push(<div key={`pad-${i}`} className="day-panel glass" style={{ opacity: 0.2, minHeight: '120px' }} />);
+                        }
+                        // Días del mes
+                        for (let i = 1; i <= daysInMonth; i++) {
+                            const d = new Date(year, month, i);
+                            const events = getEvents(d);
+                            const isToday = d.toDateString() === new Date().toDateString();
+                            days.push(
+                                <div key={`day-${i}`} className={`day-panel glass ${isToday ? 'today' : ''}`} style={{ minHeight: '120px' }}>
+                                    <div className="day-header">
+                                        <span className="day-name">{d.toLocaleDateString('es-CO', { weekday: 'short' }).replace('.', '')}</span>
+                                        <span className="day-num" style={{ color: isToday ? 'var(--primary-neon)' : 'white' }}>{d.getDate()}</span>
                                     </div>
-                                ))}
-                                {events.length > 3 && <div style={{ fontSize: '0.7rem', color: '#666' }}>+{events.length - 3} más</div>}
-                            </div>
-                        )
-                    }).filter(Boolean)
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                        {events.slice(0, 4).map((ev, k) => (
+                                            <div key={k} className="event-chip"
+                                                style={{ borderLeftColor: SUBJECTS[ev.subjectName as Subject]?.color }}
+                                                onClick={() => handleSelectInstance(ev, ev.subjectName as Subject)}
+                                                title={`${ev.summary} - ${SUBJECTS[ev.subjectName as Subject]?.displayName}`}
+                                            >
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
+                                                    <span className="chip-time">{new Date(ev.start.dateTime).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}</span>
+                                                    {/* Badge de Materia */}
+                                                    <span style={{
+                                                        fontSize: '0.6rem', padding: '1px 4px', borderRadius: '4px',
+                                                        background: SUBJECTS[ev.subjectName as Subject]?.color, color: 'black', fontWeight: 700
+                                                    }}>
+                                                        {SUBJECTS[ev.subjectName as Subject]?.displayName.substring(0, 3).toUpperCase()}
+                                                    </span>
+                                                </div>
+                                                <div className="chip-title" style={{ fontSize: '0.75rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                    {ev.summary}
+                                                </div>
+                                            </div>
+                                        ))}
+                                        {events.length > 4 && <div style={{ fontSize: '0.7rem', color: '#666', fontStyle: 'italic', textAlign: 'center' }}>+{events.length - 4} más</div>}
+                                    </div>
+                                </div>
+                            );
+                        }
+                        return days;
+                    })()
                 ) : (
                     weekDays.map((d, i) => {
                         const events = getEvents(d);
                         const isToday = d.toDateString() === new Date().toDateString();
                         return (
-                            <div key={i} className={`day-panel glass ${isToday ? 'today' : ''}`}>
+                            <div key={i} className={`day-panel glass ${isToday ? 'today' : ''}`} style={{ minHeight: 'auto' }}>
                                 <div className="day-header">
-                                    <span className="day-name">{d.toLocaleDateString('es-CO', { weekday: 'short' })}</span>
-                                    <span className="day-num">{d.getDate()}</span>
+                                    <span className="day-name">{d.toLocaleDateString('es-CO', { weekday: 'long' })}</span>
+                                    <span className="day-num" style={{ color: isToday ? 'var(--primary-neon)' : 'white' }}>{d.getDate()}</span>
                                 </div>
                                 {events.length === 0 && <div style={{ textAlign: 'center', padding: '2rem 0', color: '#555', fontSize: '0.85rem' }}>Sin clases</div>}
                                 {events.map((ev, k) => (
                                     <div key={k} className="event-chip" style={{ borderLeftColor: SUBJECTS[ev.subjectName as Subject]?.color }} onClick={() => handleSelectInstance(ev, ev.subjectName as Subject)}>
-                                        <div className="chip-time">{new Date(ev.start.dateTime).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}</div>
-                                        <div className="chip-title">{ev.summary}</div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                            <div className="chip-time">{new Date(ev.start.dateTime).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}</div>
+                                            <span style={{
+                                                fontSize: '0.65rem', padding: '2px 6px', borderRadius: '10px',
+                                                border: `1px solid ${SUBJECTS[ev.subjectName as Subject]?.color}`,
+                                                color: SUBJECTS[ev.subjectName as Subject]?.color
+                                            }}>
+                                                {SUBJECTS[ev.subjectName as Subject]?.displayName}
+                                            </span>
+                                        </div>
+                                        <div className="chip-title" style={{ fontSize: '0.9rem' }}>{ev.summary}</div>
                                     </div>
                                 ))}
                             </div>
@@ -444,6 +561,16 @@ export default function Home() {
                     </div>
                 </div>
             )}
+
+            {/* TOASTS CONTAINER */}
+            <div className="toast-container">
+                {toasts.map(t => (
+                    <div key={t.id} className="cyber-toast" style={{ borderColor: t.type === 'error' ? '#ff3333' : 'var(--primary-neon)' }}>
+                        <span style={{ fontSize: '1.2rem' }}>{t.type === 'success' ? '✅' : '⚠️'}</span>
+                        <span>{t.msg}</span>
+                    </div>
+                ))}
+            </div>
         </div>
     );
 }
